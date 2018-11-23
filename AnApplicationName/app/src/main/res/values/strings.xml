@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">AnApplicationName</string>
+    <string name="error_no_bluetooth">System doesn\'t support bluetooth</string>
+    <string name="error_no_ble">No BLE supported</string>
+</resources>
