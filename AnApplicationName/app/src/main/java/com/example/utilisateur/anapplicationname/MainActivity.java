@@ -1,5 +1,6 @@
 package com.example.utilisateur.anapplicationname;
 
+import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -11,7 +12,10 @@ import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
@@ -22,6 +26,7 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 import static android.bluetooth.BluetoothAdapter.STATE_CONNECTED;
+import static android.content.ContentValues.TAG;
 
 public class MainActivity extends Activity {
     UUID service_UUID = UUID.fromString("6E400001-B5A3-F393-E0A9-E50E24DCCA9E");
@@ -37,11 +42,18 @@ public class MainActivity extends Activity {
     BluetoothGatt gatt;
     MyAdapter adapter;
     BluetoothManager bluetoothManager;
+    Boolean sending = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, 0);
+        }
 
         but = findViewById(R.id.sendData);
         but.setOnClickListener(new View.OnClickListener() {
@@ -54,16 +66,28 @@ public class MainActivity extends Activity {
                 if (Service == null) {
                     Log.e("error", "service not found!");
                 }
-                BluetoothGattCharacteristic charac = Service
-                        .getCharacteristic(TX_char_UUID);
+                BluetoothGattCharacteristic charac = Service.getCharacteristic(TX_char_UUID);
                 if (charac == null) {
                     Log.e("", "char not found!");
                 }
 
                 byte[] value = new byte[1];
-                value[0] = (byte) (21 & 0xFF);
-                charac.setValue("Yolo");
-                gatt.writeCharacteristic(charac);
+
+                if (sending) {
+                    value[0] = (byte) ('0' & 0xFF);
+                    charac.setValue(value);
+                } else {
+                    value[0] = (byte) ('1' & 0xFF);
+                    charac.setValue(value);
+                }
+                sending = !sending;
+
+                if (gatt.writeCharacteristic(charac)) {
+                    Log.e("writing", "writed");
+                } else {
+                    Log.e("writing", "failed");
+
+                }
             }
         });
 
@@ -148,19 +172,23 @@ public class MainActivity extends Activity {
             @Override
             public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
                 super.onCharacteristicWrite(gatt, characteristic, status);
-                Log.d("CharWrite", String.valueOf((short)characteristic.getValue()[0]));
+                Log.d("CharWrite", String.valueOf(characteristic.getValue()[0] & 0xFF));
 
             }
 
             @Override
             public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
                 super.onCharacteristicRead(gatt, characteristic, status);
-                Log.d("CharRead", String.valueOf((short)characteristic.getValue()[0]));
+                Log.d("CharRead", String.valueOf(characteristic.getValue()[0] & 0xFF));
 
             }
         };
-
+        Log.d(TAG, "communicate: connection");
         gatt = myDevice.connectGatt(this, false, gattCallback);
-        gatt.connect();
+        if (gatt.connect()) {
+            Log.i(TAG, "Connection: managed connection");
+        } else {
+            Log.e(TAG, "Fail: failed to connect");
+        }
     }
 }
