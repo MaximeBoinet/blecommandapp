@@ -18,8 +18,12 @@ uint8_t manageLed = 5;
 uint8_t askForMic = 21;
 bool ledactivated = true;
 bool micOpen = false;
+bool nextPressed = false;
+bool lastPressed = false;
+bool manageLedPressed = false;
 unsigned long lastDebounceTime = 0;
 unsigned long debounceDelay = 500;
+
 
 #define SERVICE_UUID           "6E400001-B5A3-F393-E0A9-E50E24DCCA9E"
 #define CHARACTERISTIC_UUID_RX "6E400002-B5A3-F393-E0A9-E50E24DCCA9E"
@@ -50,20 +54,16 @@ class MyCallbacks: public BLECharacteristicCallbacks {
         digitalWrite(dataTransit, HIGH);
       
       if (rxValue.length() > 0) {
-        Serial.println("*********");
         Serial.print("Received Value: ");
         for (int i = 0; i < rxValue.length(); i++) {
           Serial.print("|");
           Serial.print(rxValue[i]);
           Serial.print("|");
         }
-        Serial.println();
-        Serial.println("*********");
-        if (rxValue[0] != 1) {
-          micOpen == false;
-        } else {
-          micOpen == true;
-        }
+
+        micOpen = (rxValue[0] == 1);
+        
+        Serial.println(micOpen);
         digitalWrite(openTalk, rxValue[0] == 1);
       }
       delay(200);
@@ -107,19 +107,25 @@ void setup() {
 
 void loop() {
 
-  if (digitalRead(manageLed) == LOW) {
+  if (digitalRead(manageLed) == LOW && manageLedPressed == false) {
+    manageLedPressed = true;
+    
     if (ledactivated) {
       turnOffLeds();
     } else {
       turnOnLeds();
     }
+  } else if (digitalRead(manageLed) == HIGH) {
+    manageLedPressed = false;
   }
   
   if (deviceConnected) {
-    if (millis() - lastDebounceTime > debounceDelay) {
+    if (digitalRead(askForMic) == LOW && !micOpen && millis() - lastDebounceTime > debounceDelay) {
       lastDebounceTime = millis();
-      manageMessageToSend();
+      askForMicF();
     }
+    
+    manageMessageToSend();
 	}
  
   if (!deviceConnected && oldDeviceConnected) {
@@ -134,9 +140,24 @@ void loop() {
   }
 }
 
+void askForMicF() {
+  
+    if (ledactivated)
+      digitalWrite(dataTransit, HIGH);
+      
+    txValue = 2;
+    pTxCharacteristic->setValue(&txValue, 1);
+    Serial.print("Sending value: ");
+    Serial.println(txValue);
+    pTxCharacteristic->notify();
+    digitalWrite(dataTransit, LOW);
+}
+
 void manageMessageToSend() {
   
-  if (digitalRead(next) == LOW) {
+  if (digitalRead(next) == LOW && nextPressed == false) {
+
+    nextPressed = true;
     
     if (ledactivated)
       digitalWrite(dataTransit, HIGH);
@@ -146,9 +167,14 @@ void manageMessageToSend() {
     Serial.print("Sending value: ");
     Serial.println(txValue);
     pTxCharacteristic->notify();
-    delay(25);
     digitalWrite(dataTransit, LOW);
-  } else if (digitalRead(previous) == LOW) {
+  } else if (digitalRead(next) == HIGH){
+    nextPressed = false;
+  }
+  
+  if (digitalRead(previous) == LOW && !lastPressed) {
+    
+    lastPressed = true;
     
     if (ledactivated)
       digitalWrite(dataTransit, HIGH);
@@ -160,20 +186,8 @@ void manageMessageToSend() {
     pTxCharacteristic->notify();
     delay(25);
     digitalWrite(dataTransit, LOW);
-  }
-
-  if (digitalRead(askForMic) == LOW) {
-
-    if (ledactivated)
-      digitalWrite(dataTransit, HIGH);
-      
-    txValue = 2;
-    pTxCharacteristic->setValue(&txValue, 1);
-    Serial.print("Sending value: ");
-    Serial.println(txValue);
-    pTxCharacteristic->notify();
-    delay(25);
-    digitalWrite(dataTransit, LOW);
+  } else if (digitalRead(previous) == HIGH) {
+    lastPressed = false;
   }
 }
 
